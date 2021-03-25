@@ -185,7 +185,17 @@ class ReshapeOptimizer(GraphOptimizerBase):
                 keepdims = node.get_attr_value("keepdims", 1)
                 results[node.output[0]] = np.prod(inp, axis=tuple(axes), keepdims=keepdims)
             if node.type == "Slice":
-                pass
+                inps = [results[inp] for inp in node.input]
+                rank = len(inps[0].shape)
+                if len(inps) == 3:
+                    inps.append(list(range(rank)))
+                if len(inps) == 4:
+                    inps.append([1] * rank)
+                slices = [slice(None, None, None) for _ in range(rank)]
+                data, starts, ends, axes, steps = inps
+                for axis, start, end, step in zip(axes, starts, ends, steps):
+                    slices[axis] = slice(start, end, step)
+                results[node.output[0]] = data[tuple(slices)]
             if node.type == "Concat":
                 axis = node.get_attr_value("axis")
                 inps = [results[inp] for inp in node.input]
