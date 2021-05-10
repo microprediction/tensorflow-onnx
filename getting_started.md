@@ -2,6 +2,8 @@
 
 TensorFlow models (including keras and TFLite models) can be converted to ONNX using the [tf2onnx](https://github.com/onnx/tensorflow-onnx) tool.
 
+Full code for this tutorial is available [here](https://github.com/onnx/tensorflow-onnx/blob/master/examples/getting_started.py).
+
 ## Installation
 
 First install tf2onnx in a python environment that already has TensorFlow installed.
@@ -46,7 +48,7 @@ See the [CLI Reference](https://github.com/onnx/tensorflow-onnx#cli-reference) f
 
 ### TFLite
 
-tf2onnx has support for converting tflite models. Add the optional `--dequantize` flag to remove quantization.
+tf2onnx has support for converting tflite models.
 
 `python -m tf2onnx.convert --tflite path/to/model.tflite --output dst/path/model.onnx --opset 13`
 
@@ -84,10 +86,6 @@ for ort_res, tf_res in zip(results_ort, results_tf):
 
 print("Results match")
 ```
-
-## Viewing an ONNX Model
-
-ONNX models can be viewed in the open-source [Netron](https://github.com/lutzroeder/Netron) tool. The tool can be used in-browser at [netron.app](https://netron.app/).
 
 ## Conversion Failures
 
