@@ -305,8 +305,8 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
     Returns:
         An ONNX model_proto and an external_tensor_storage dict.
     """
-    if LooseVersion(tf.__version__) < "2.0":
-        raise NotImplementedError("from_keras requires tf-2.0 or newer")
+    #if LooseVersion(tf.__version__) < "2.0":
+    #    raise NotImplementedError("from_keras requires tf-2.0 or newer")
 
     from tensorflow.python.keras.saving import saving_utils as _saving_utils # pylint: disable=import-outside-toplevel
 
@@ -330,24 +330,35 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
     # These inputs will be removed during freezing (includes resources, etc.)
     graph_captures = concrete_func.graph._captures  # pylint: disable=protected-access
     captured_inputs = [t_name.name for t_val, t_name in graph_captures.values()]
-    input_names = [input_tensor.name for input_tensor in concrete_func.inputs
-                   if input_tensor.name not in captured_inputs]
-    output_names = [output_tensor.name for output_tensor in concrete_func.outputs
-                    if output_tensor.dtype != tf.dtypes.resource]
+    # input_names = [input_tensor.name for input_tensor in concrete_func.inputs
+    #                if input_tensor.name not in captured_inputs]
+    # output_names = [output_tensor.name for output_tensor in concrete_func.outputs
+    #                 if output_tensor.dtype != tf.dtypes.resource]
+    input_names = [t.name for t in model.inputs]
+    output_names = [t.name for t in model.outputs]
+    tensors_to_rename = dict(zip(input_names, model.input_names))
+    if len(set(model.output_names)) == len(model.output_names):
+        tensors_to_rename.update(zip(output_names, model.output_names))
 
-    tensors_to_rename = tensor_names_from_structed(concrete_func, input_names, output_names)
-    reverse_lookup = {v: k for k, v in tensors_to_rename.items()}
+    #tensors_to_rename = tensor_names_from_structed(concrete_func, input_names, output_names)
+    # reverse_lookup = {v: k for k, v in tensors_to_rename.items()}
 
-    if model.output_names:
-        # model.output_names is an optional field of Keras models indicating output order. It is None if unused.
-        output_names = [reverse_lookup[out] for out in model.output_names]
-    elif isinstance(concrete_func.structured_outputs, dict):
-        # Other models specify output order using the key order of structured_outputs
-        output_names = [reverse_lookup[out] for out in concrete_func.structured_outputs.keys()]
+    # if model.output_names:
+    #     # model.output_names is an optional field of Keras models indicating output order. It is None if unused.
+    #     output_names = [reverse_lookup[out] for out in model.output_names]
+    # elif isinstance(concrete_func.structured_outputs, dict):
+    #     # Other models specify output order using the key order of structured_outputs
+    #     output_names = [reverse_lookup[out] for out in concrete_func.structured_outputs.keys()]
+
+    from tf2onnx.tf_loader import tf_session, tf_placeholder, freeze_session
+    from tensorflow.python.framework.graph_util import convert_variables_to_constants
 
     with tf.device("/cpu:0"):
-        frozen_graph, initialized_tables = \
-            tf_loader.from_trackable(model, concrete_func, input_names, output_names, large_model)
+        sess = tf.keras.backend.get_session(model.outputs)
+        frozen_graph = convert_variables_to_constants(sess, sess.graph.as_graph_def(), [n.split(":")[0] for n in output_names])
+        initialized_tables = None
+        #frozen_graph, initialized_tables = \
+        #    tf_loader.from_trackable(model, concrete_func, input_names, output_names, large_model)
         model_proto, external_tensor_storage = _convert_common(
             frozen_graph,
             name=model.name,
