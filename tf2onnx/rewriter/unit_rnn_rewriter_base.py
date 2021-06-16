@@ -63,16 +63,16 @@ class UnitRnnRewriterBase(LoopRewriterBase):
     def need_rewrite(self, context):
         context.rnn_scope = get_rnn_scope_name(context.while_context_scope)
 
-        if not parse_rnn_loop(self.g, context.loop_properties, context.rnn_scope,
+        if context.is_subgraph is None and context.while_op is None and not parse_rnn_loop(self.g, context.loop_properties, context.rnn_scope,
                               context.while_context_scope):
             logger.debug("parse_rnn_loop failed, SKIP")
             return False
 
-        if not self.parse_unit_rnn(context):
+        if context.while_op is None and not self.parse_unit_rnn(context):
             logger.debug("failed to parse unit rnn, SKIP")
             return False
 
-        if not self.is_valid(context):
+        if not context.is_subgraph and context.while_op is None and not self.is_valid(context):
             logger.debug("parsed rnn is not valid, SKIP")
             return False
         return True

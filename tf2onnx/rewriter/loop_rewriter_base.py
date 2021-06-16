@@ -27,6 +27,8 @@ class Context(object):
         self.while_context_scope = None
         self.loop_properties = LoopProperties()
         self.loop_cond = None
+        self.while_op = None
+        self.is_subgraph = None
 
         self.cell_graph = None  # GraphInfo of cell graph
         self.cond_graph = None  # GraphInfo of condition graph
@@ -190,6 +192,41 @@ class LoopRewriterBase(object):
         return REWRITER_RESULT.FAIL
 
     def run_internal(self):
+
+        # context = self.create_context()
+        # context.is_subgraph = True
+        # self._check_in_read_only_mode(context)
+        # if self.need_rewrite(context):
+        #     self.g.loop_rewriter_contexts[type(self)] = context
+        #     print("Hi")
+
+        loop_ops = [op for op in self.g.get_nodes() if op.is_while()]
+
+        for op in loop_ops:
+            break
+            context = self.create_context()
+            context.while_op = op
+            from tf2onnx.tf_loader import find_function
+            body_graph = find_function(context.while_op.get_attr_str("body"))
+            body_context = body_graph.loop_rewriter_contexts[type(self)]
+            
+            print("Hello")
+            self._check_in_read_only_mode(context)  # set .loop_properties.add_variable and .loop_properties.add_scan_input(ta)
+            if self.need_rewrite(context):
+                for d in body_context.weights:
+                    weights = {}
+                    for k, v in d.items():
+                        if isinstance(v, str):
+                            idx = body_graph.input_names.index(v)
+                            v = context.while_op.inputs[idx].get_tensor_value(as_list=False)
+                            print("Hi")
+                        weights[k] = v
+                    context.weights.append(weights)
+                self.num_lstm_layers = 1
+                print("hi")
+
+                _result = self.rewrite(context)
+
         loopcond_ops = []
         for op in self.g.get_nodes():
             if is_tf_loopcond_op(op):
@@ -228,6 +265,14 @@ class LoopRewriterBase(object):
         self._parse_input_ta(context)
 
     def _parse_loop_variables(self, context):
+        if context.is_subgraph is not None:
+            context.while_context_scope = "/".join(self.g.outputs[0].split("/")[:-1])
+            return
+
+        if context.while_op is not None:
+            context.while_context_scope = context.while_op.name + "/"
+            return
+
         loop_cond_op = context.loop_cond
         parts = loop_cond_op.name.split('/')
         context.while_context_scope = '/'.join(parts[0:-1]) + "/"
@@ -242,6 +287,9 @@ class LoopRewriterBase(object):
             context.loop_properties.add_variable(loop_var)
 
     def _parse_input_ta(self, context):
+        if context.while_op is not None:
+            return
+
         graph_inputs = [v.switch_true_identity_output.id for v in context.loop_properties.all_variables.values()
                         if v.switch_true_identity_output.id]
         matcher = GraphMatcher(self.ta_read_input_pattern, allow_reorder=False)

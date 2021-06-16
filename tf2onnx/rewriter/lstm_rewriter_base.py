@@ -77,6 +77,9 @@ class LSTMRewriterBase(UnitRnnRewriterBase):
             return False
         context.weights = weights
 
+        if context.is_subgraph:
+            return True
+
         if not self.get_state_variables(context):
             logger.debug("no cell variable initializers found, SKIP")
             return False
@@ -111,6 +114,15 @@ class LSTMRewriterBase(UnitRnnRewriterBase):
         """match unit cell"""
         for cell_pattern in get_pattern(unittype):
             matcher = GraphMatcher(cell_pattern, allow_reorder=True)
+
+            if context.is_subgraph is not None:
+                match_results = list(matcher.match_ops(self.g.get_nodes()))
+                return match_results
+
+            if context.while_op is not None:
+                from tf2onnx.tf_loader import find_function
+                body_graph = find_function(context.while_op.get_attr_str("body"))
+                list(matcher.match_ops(body_graph.get_nodes()))
 
             loop_props = context.loop_properties
             inputs = loop_props.state_inputs + loop_props.scan_inputs

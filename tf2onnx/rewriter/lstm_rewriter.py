@@ -93,9 +93,12 @@ class LSTMRewriter(LSTMRewriterBase):
         match = context.cell_match[i]
 
         w_e = match.get_op("cell_kernel")
-        w = get_weights_from_const_node(self.g, w_e)
-        if w is None or w.size == 0:
-            return None
+        if context.is_subgraph and w_e.is_graph_input():
+            w = w_e.output[0]
+        else:
+            w = get_weights_from_const_node(self.g, w_e)
+            if w is None or w.size == 0:
+                return None
 
         # check https://www.tensorflow.org/versions/r1.8/api_docs/cc/class/tensorflow/ops/bias-add
         # for bias_add data format
@@ -105,20 +108,26 @@ class LSTMRewriter(LSTMRewriterBase):
             return None
 
         b_e = match.get_op("cell_bias")
+        b_dtype = None
         if b_e is None:
             b = np.array([0 for i in range(len(w[0]))]).astype(w.dtype)
+            b_dtype = w.dtype
+        elif context.is_subgraph and b_e.is_graph_input():
+            b = b_e.output[0]
+            b_dtype = utils.map_onnx_to_numpy_type(self.g.get_dtype(b))
         else:
             b = get_weights_from_const_node(self.g, b_e)
             if b is None or b.shape[0] != w.shape[1]:
                 logger.warning("cell_kernel and cell_bias's dimensions does not match, skip")
                 return None
+            b_dtype = b.dtype
 
         ft_bias_node = match.get_op("ft_bias")
         ft_bias = get_weights_from_const_node(self.g, ft_bias_node)
         if ft_bias is None:
             return None
 
-        if not b.dtype == ft_bias.dtype:
+        if not b_dtype == ft_bias.dtype:
             return None
 
         return {

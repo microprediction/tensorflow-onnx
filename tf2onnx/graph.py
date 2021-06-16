@@ -464,6 +464,7 @@ class Graph(object):
         # A list of index, output tuples of potential scan outputs in this graph
         # Used by the tflite while loop handler
         self.scan_outputs = []
+        self.loop_rewriter_contexts = {}
         self.func_inputs = []
         self.ragged_variant_list_reads = []
         self.ragged_variant_list_writes = []

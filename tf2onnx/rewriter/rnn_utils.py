@@ -30,43 +30,53 @@ class REWRITER_RESULT(Enum):
 
 # TensorFlow LSTMCell/BasicLSTMCell computation graph matching
 
-xc_pattern = \
-    OpTypePattern('Split', inputs=[
-        OpTypePattern("Const"), # axis for split
-        OpTypePattern("BiasAdd", name="bias_add", inputs=[
-            OpTypePattern("MatMul", inputs=[
-                OpTypePattern("ConcatV2|Concat", name="xh"),
-                OpTypePattern("Enter", inputs=[
-                    OpTypePattern("*", name="cell_kernel"),
+_make_xc_pattern_memo = {}
+
+def make_xc_pattern(enter_or_id="Enter"):
+    global _make_xc_pattern_memo
+    if enter_or_id not in _make_xc_pattern_memo:
+        pattern = OpTypePattern('Split', inputs=[
+            OpTypePattern("Const"), # axis for split
+            OpTypePattern("BiasAdd", name="bias_add", inputs=[
+                OpTypePattern("MatMul", inputs=[
+                    OpTypePattern("ConcatV2|Concat", name="xh"),
+                    OpTypePattern(enter_or_id, inputs=[
+                        OpTypePattern("*", name="cell_kernel"),
+                    ]),
+                ]),
+                OpTypePattern(enter_or_id, inputs=[
+                    OpTypePattern("*", name="cell_bias"),
                 ]),
             ]),
-            OpTypePattern("Enter", inputs=[
-                OpTypePattern("*", name="cell_bias"),
-            ]),
-        ]),
-    ])
+        ])
+        _make_xc_pattern_memo[enter_or_id] = pattern
+    return _make_xc_pattern_memo[enter_or_id]
 
-lstmcell_pattern = \
-    OpTypePattern('Mul', name='ht', inputs=[
-        OpTypePattern("Sigmoid", name="ot", inputs=[xc_pattern]),
+xc_pattern = make_xc_pattern()
+
+def make_lstmcell_pattern(enter_or_id="Enter"):
+    return OpTypePattern('Mul', name='ht', inputs=[
+        OpTypePattern("Sigmoid", name="ot", inputs=[make_xc_pattern(enter_or_id)]),
         OpTypePattern('Tanh', inputs=[
             OpTypePattern("Add|AddV2", name="ct", inputs=[
                 OpTypePattern("Mul", name="ct_identity_consumer", inputs=[
                     OpTypePattern("Sigmoid", name="ft", inputs=[
                         OpTypePattern("Add|AddV2", inputs=[
-                            xc_pattern,
+                            make_xc_pattern(enter_or_id),
                             OpTypePattern("*", name="ft_bias"),
                         ]),
                     ]),
                     OpTypePattern("*"),
                 ]),
                 OpTypePattern("Mul", inputs=[
-                    OpTypePattern("Sigmoid", name="it", inputs=[xc_pattern]),
-                    OpTypePattern("Tanh", name="gt", inputs=[xc_pattern]),
+                    OpTypePattern("Sigmoid", name="it", inputs=[make_xc_pattern(enter_or_id)]),
+                    OpTypePattern("Tanh", name="gt", inputs=[make_xc_pattern(enter_or_id)]),
                 ]),
             ]),
         ]),
     ])
+
+lstmcell_pattern = make_lstmcell_pattern()
 
 xc_pattern_optimized = \
     OpTypePattern('Split', inputs=[
